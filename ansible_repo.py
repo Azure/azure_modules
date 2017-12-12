@@ -9,6 +9,7 @@ from git import Repo
 ansible_repo_path = "/tmp/ansible_repo"
 azure_repo_path = "/tmp/azure_repo"
 log_file_path = "./commit_history.json"
+path_mapping_file_path = "./folder_mapping.json"
 
 def get_latest_commit_sha(repo, branch, path):
     commits = repo.get_commits(sha=branch, path=path)
@@ -67,15 +68,24 @@ def clone_repos():
 
 
 def copy(path):
-    print "Copying " + path
+    full_path = os.path.join(ansible_repo_path, path)
+    if os.path.isdir(full_path):
+        copy_folder(path)
+    else:
+        copy_file(path)
 
+def copy_file(path):
+    print "Copying file " + path
+    path_map = json.load(open(path_mapping_file_path))
+    azure_path = path_map[path]
 
-def copy_file():
-    print "Copying file..."
+    src = os.path.join(ansible_repo_path, path)
+    dest = os.path.join(azure_repo_path, azure_path)
 
+    shutil.copy(src, dest)
 
-def copy_folder():
-    print "Copying folder..."
+def copy_folder(path):
+    print "Copying folder " + path
 
 
 # azure_org = g.get_organization("Azure")
