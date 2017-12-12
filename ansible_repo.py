@@ -35,12 +35,13 @@ def save_back_to_json(data, file_name):
         f.write(json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False))
 
 
+# g = Github("2c09286ec369be4a550b558e8dfb94a7df1fbf8d")
+# ansible_org = g.get_organization("ansible")
+# ansible_repo = ansible_org.get_repo("ansible")
+# azure_org = g.get_organization("Azure")
+# role_repo = azure_org.get_repo("azure_modules")
+
 def main():
-    g = Github("2c09286ec369be4a550b558e8dfb94a7df1fbf8d")
-    ansible_org = g.get_organization("ansible")
-    ansible_repo = ansible_org.get_repo("ansible")
-    azure_org = g.get_organization("Azure")
-    role_repo = azure_org.get_repo("azure_modules")
     print "hello"
 
 
