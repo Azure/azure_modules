@@ -1,9 +1,0 @@
----
-- hosts: localhost
-  roles:
-  - { role: azure_modules }
-  tasks:
-    - debug:
-        msg: "{{resource_group}} {{test}}"
-
-    - include_tasks: "{{test}}"
