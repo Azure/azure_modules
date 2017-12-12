@@ -5,11 +5,14 @@ import os
 import shutil
 from time import gmtime, strftime
 from git import Repo
+from git import Actor
 
 ansible_repo_path = "/tmp/ansible_repo"
 azure_repo_path = "/tmp/azure_repo"
 log_file_path = "./commit_history.json"
 path_mapping_file_path = "./folder_mapping.json"
+local_azure_repo = None
+new_branch_name = None
 
 def get_latest_commit_sha(repo, branch, path):
     commits = repo.get_commits(sha=branch, path=path)
@@ -57,14 +60,15 @@ def create_clean_dir(dir):
 
 def clone_repos():
     print "Cloning repos to local..."
-    create_clean_dir(ansible_repo_path)
-    create_clean_dir(azure_repo_path)
+    #create_clean_dir(ansible_repo_path)
+    #create_clean_dir(azure_repo_path)
 
+    global local_azure_repo
     azure_repo = Repo()
-    azure_repo.clone_from("https://github.com/Azure/azure_modules.git", azure_repo_path)
+    local_azure_repo = azure_repo.clone_from("https://ZhijunZhao:2c09286ec369be4a550b558e8dfb94a7df1fbf8d@github.com/Azure/azure_modules.git", azure_repo_path)
 
-    ansible_repo = Repo()
-    ansible_repo.clone_from("https://github.com/ansible/ansible.git", ansible_repo_path)
+    #ansible_repo = Repo()
+    #ansible_repo.clone_from("https://github.com/ansible/ansible.git", ansible_repo_path)
 
 
 def copy(path):
@@ -119,8 +123,9 @@ def copy_folder_specially(path):
 # role_repo = azure_org.get_repo("azure_modules")
 
 def check_out_new_branch():
-    print "ddddd"
-
+    global new_branch_name
+    new_branch_name = "integration-" + strftime("%Y-%m-%d-%H-%M-%S", gmtime())
+    local_azure_repo.git.checkout('HEAD', b=new_branch_name)
 
 def copy_changed_files():
     g = Github("2c09286ec369be4a550b558e8dfb94a7df1fbf8d")
@@ -141,8 +146,12 @@ def copy_changed_files():
 
 
 def push_changes_to_remote():
-    print "dddddd"
-
+    local_azure_repo.git.add(A=True)
+    author = Actor("ZhijunZhao", "zhijzhao@microsoft.com")
+    committer = Actor("ZhijunZhao", "zhijzhao@microsoft.com")
+    local_azure_repo.index.commit("Merged changes of Azure modules from Ansible repo", author=author, committer=committer)
+    refspec = new_branch_name+":"+new_branch_name
+    local_azure_repo.remotes.origin.push(refspec=refspec)
 
 def send_pull_request():
     print "dddd"
