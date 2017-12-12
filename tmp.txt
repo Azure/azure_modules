@@ -1,0 +1,13 @@
+
+commit_history = json.load(open('./commit_history.json'))
+
+changed = False
+for path, sha in commit_history.iteritems():
+    print "old: ", sha
+    new_sha = get_latest_commit_sha(ansible_repo, "devel", path)
+    if(sha != new_sha):
+        commit_history[path] = new_sha
+        changed = True
+
+
+
