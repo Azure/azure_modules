@@ -100,19 +100,29 @@ def copy_folder(path):
 
 
 def copy_folder_normally(path):
-    print "Normally..."
     src, dest = get_joined_path(path)
     shutil.rmtree(dest)
     shutil.copytree(src, dest)
 
 
 def copy_folder_specially(path):
-    print "Specially..."
+    src, dest = get_joined_path(path)
+    shutil.rmtree(dest)
+    for dir_name in os.listdir(src):
+        src_dir_path = os.path.join(src, dir_name)
+        dest_dir_path = os.path.join(dest, dir_name)
+        if os.path.isdir(src_dir_path) and "azure_rm_" in dir_name:
+            shutil.copytree(src_dir_path, dest_dir_path)
+
 
 # azure_org = g.get_organization("Azure")
 # role_repo = azure_org.get_repo("azure_modules")
 
-def migrate_contents():
+def check_out_new_branch():
+    print "ddddd"
+
+
+def copy_changed_files():
     g = Github("2c09286ec369be4a550b558e8dfb94a7df1fbf8d")
     ansible_org = g.get_organization("ansible")
     remote_ansible_repo = ansible_org.get_repo("ansible")
@@ -130,17 +140,33 @@ def migrate_contents():
         save_back_to_json(commit_history, log_file_path)
 
 
+def push_changes_to_remote():
+    print "dddddd"
+
+
+def send_pull_request():
+    print "dddd"
+
+
+def migrate_contents():
+    check_out_new_branch()
+    copy_changed_files()
+    push_changes_to_remote()
+    send_pull_request()
+
+
 def main():
-    print "Starting"
+    print "Starting..."
 
     if not ansible_repo_has_new_content():
         print "No new content. Exiting..."
         return
     else:
-        print "Migrating content from Ansible repo to Azure modules repo."
+        print "Migrating content from Ansible repo to Azure modules repo..."
 
     clone_repos()
+    migrate_contents()
 
 
 if __name__ == "__main__":
-    migrate_contents()
+    main()
