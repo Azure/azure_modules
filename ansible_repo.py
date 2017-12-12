@@ -74,19 +74,40 @@ def copy(path):
     else:
         copy_file(path)
 
-def copy_file(path):
-    print "Copying file " + path
+
+def get_joined_path(path):
     path_map = json.load(open(path_mapping_file_path))
     azure_path = path_map[path]
 
     src = os.path.join(ansible_repo_path, path)
     dest = os.path.join(azure_repo_path, azure_path)
 
+    return src, dest
+
+
+def copy_file(path):
+    print "Copying file " + path
+    src, dest = get_joined_path(path)
     shutil.copy(src, dest)
+
 
 def copy_folder(path):
     print "Copying folder " + path
+    if "test/integration/targets" in path:
+        copy_folder_specially(path)
+    else:
+        copy_folder_normally(path)
 
+
+def copy_folder_normally(path):
+    print "Normally..."
+    src, dest = get_joined_path(path)
+    shutil.rmtree(dest)
+    shutil.copytree(src, dest)
+
+
+def copy_folder_specially(path):
+    print "Specially..."
 
 # azure_org = g.get_organization("Azure")
 # role_repo = azure_org.get_repo("azure_modules")
