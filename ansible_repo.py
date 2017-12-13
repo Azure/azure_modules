@@ -7,6 +7,7 @@ from time import gmtime, strftime
 from git import Repo
 from git import Actor
 
+github_access_token = "zhijun1988zhao8756c30e21c92e1e2eafba90b41bca8ced6a"
 ansible_repo_path = "/tmp/ansible_repo"
 azure_repo_path = "/tmp/azure_repo"
 log_file_path = "./commit_history.json"
@@ -33,7 +34,7 @@ def has_new_content(repo, branch_name, log_file):
 
 
 def ansible_repo_has_new_content():
-    g = Github("2c09286ec369be4a550b558e8dfb94a7df1fbf8d")
+    g = Github(github_access_token)
     ansible_org = g.get_organization("ansible")
     remote_ansible_repo = ansible_org.get_repo("ansible")
     return has_new_content(remote_ansible_repo, "devel", log_file_path)
@@ -65,7 +66,7 @@ def clone_repos():
 
     global local_azure_repo
     azure_repo = Repo()
-    local_azure_repo = azure_repo.clone_from("https://ZhijunZhao:2c09286ec369be4a550b558e8dfb94a7df1fbf8d@github.com/Azure/azure_modules.git", azure_repo_path)
+    local_azure_repo = azure_repo.clone_from("https://ZhijunZhao:" + github_access_token + "@github.com/Azure/azure_modules.git", azure_repo_path)
 
     #ansible_repo = Repo()
     #ansible_repo.clone_from("https://github.com/ansible/ansible.git", ansible_repo_path)
@@ -119,16 +120,15 @@ def copy_folder_specially(path):
             shutil.copytree(src_dir_path, dest_dir_path)
 
 
-# azure_org = g.get_organization("Azure")
-# role_repo = azure_org.get_repo("azure_modules")
-
 def check_out_new_branch():
     global new_branch_name
     new_branch_name = "integration-" + strftime("%Y-%m-%d-%H-%M-%S", gmtime())
+    print "Creating new branch " + new_branch_name
     local_azure_repo.git.checkout('HEAD', b=new_branch_name)
 
 def copy_changed_files():
-    g = Github("2c09286ec369be4a550b558e8dfb94a7df1fbf8d")
+    print "Copying changes..."
+    g = Github(github_access_token)
     ansible_org = g.get_organization("ansible")
     remote_ansible_repo = ansible_org.get_repo("ansible")
     commit_history = json.load(open(log_file_path))
@@ -146,6 +146,7 @@ def copy_changed_files():
 
 
 def push_changes_to_remote():
+    print "Commit and push changes to remote"
     local_azure_repo.git.add(A=True)
     author = Actor("ZhijunZhao", "zhijzhao@microsoft.com")
     committer = Actor("ZhijunZhao", "zhijzhao@microsoft.com")
@@ -153,8 +154,15 @@ def push_changes_to_remote():
     refspec = new_branch_name+":"+new_branch_name
     local_azure_repo.remotes.origin.push(refspec=refspec)
 
+
 def send_pull_request():
-    print "dddd"
+    print "Sending pull request"
+    g = Github(github_access_token)
+    azure_org = g.get_organization("Azure")
+    remote_azure_repo = azure_org.get_repo("azure_modules")
+    pr = remote_azure_repo.create_pull("[Automated Integration]Merge Azure module changes from Ansible repo",
+                                       "@ZhijunZhao @yuwzho @zikalino @yaweiw", "master", new_branch_name)
+    print "Created PR: " + pr.url
 
 
 def migrate_contents():
