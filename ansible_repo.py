@@ -8,10 +8,13 @@ from git import Repo
 from git import Actor
 
 github_access_token = ""
-ansible_repo_path = "/tmp/ansible_repo"
-azure_repo_path = "/tmp/azure_repo"
-sha_file_path = "/tmp/azure_repo/files/sha.json"
-repo_mapping_file_path = "./repo_mapping.json"
+
+config = json.load(open("./config.json"))
+ansible_repo_path = config["ansible_repo_path"]
+azure_repo_path = config["azure_repo_path"]
+sha_file_path = config["sha_file_path"]
+repo_mapping_file_path = config["repo_mapping_file_path"]
+
 local_azure_repo = None
 new_branch_name = None
 
@@ -47,18 +50,11 @@ def ansible_repo_has_new_content():
     g = Github(github_access_token)
     ansible_org = g.get_organization("ansible")
     remote_ansible_repo = ansible_org.get_repo("ansible")
-    return has_new_content(remote_ansible_repo, "devel", sha_file_path)
-
-
-def create_branch(repo):
-    role_master_sha = repo.get_branch("master").commit.sha
-    new_branch_name = "refs/heads/integration-" + strftime("%Y-%m-%d-%H-%M-%S", gmtime())
-    repo.create_git_ref(new_branch_name, role_master_sha)
-    return new_branch_name
+    return has_new_content(remote_ansible_repo, config["ansible_default_branch"], sha_file_path)
 
 
 def save_back_to_json(data, file_name):
-    print "saving data to " + file_name
+    print "Save data to " + file_name
     with io.open(file_name, 'w', encoding='utf-8') as f:
         f.write(json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False))
 
@@ -95,14 +91,14 @@ def get_joined_path(ansible_path):
 
 
 def copy_file(path):
-    print "Copying file " + path
+    print "Copy file " + path
     src, dest = get_joined_path(path)
     shutil.copy(src, dest)
 
 
 def copy_folder(path):
-    print "Copying folder " + path
-    if "test/integration/targets" in path:
+    print "Copy folder " + path
+    if config["special_src_folder_path"] in path:
         copy_folder_specially(path)
     else:
         copy_folder_normally(path)
@@ -120,19 +116,19 @@ def copy_folder_specially(path):
     for dir_name in os.listdir(src):
         src_dir_path = os.path.join(src, dir_name)
         dest_dir_path = os.path.join(dest, dir_name)
-        if os.path.isdir(src_dir_path) and "azure_rm_" in dir_name:
+        if os.path.isdir(src_dir_path) and config["test_case_folder_prefix"] in dir_name:
             shutil.copytree(src_dir_path, dest_dir_path)
 
 
 def check_out_new_branch():
     global new_branch_name
     new_branch_name = "integration-" + strftime("%Y-%m-%d-%H-%M-%S", gmtime())
-    print "Creating new branch " + new_branch_name
+    print "Create new branch " + new_branch_name
     local_azure_repo.git.checkout('HEAD', b=new_branch_name)
 
 
 def copy_changed_files():
-    print "Copying changes..."
+    print "Copy changes"
     g = Github(github_access_token)
     ansible_org = g.get_organization("ansible")
     remote_ansible_repo = ansible_org.get_repo("ansible")
@@ -153,20 +149,20 @@ def copy_changed_files():
 def push_changes_to_remote():
     print "Commit and push changes to remote"
     local_azure_repo.git.add(A=True)
-    author = Actor("ZhijunZhao", "zhijzhao@microsoft.com")
-    committer = Actor("ZhijunZhao", "zhijzhao@microsoft.com")
+    author = Actor(config["author"], config["mail"])
+    committer = Actor(config["author"], config["mail"])
     local_azure_repo.index.commit("Merged changes of Azure modules from Ansible repo", author=author, committer=committer)
     refspec = new_branch_name+":"+new_branch_name
     local_azure_repo.remotes.origin.push(refspec=refspec)
 
 
 def send_pull_request():
-    print "Sending pull request"
+    print "Send pull request"
     g = Github(github_access_token)
     azure_org = g.get_organization("Azure")
     remote_azure_repo = azure_org.get_repo("azure_modules")
     pr = remote_azure_repo.create_pull("[Automated Integration]Merge Azure module changes from Ansible repo",
-                                       "@ZhijunZhao @yuwzho @zikalino @yaweiw", "master", new_branch_name)
+                                       config["alias"], config["azure_default_branch"], new_branch_name)
     print "Created PR: " + pr.url
 
 
@@ -185,7 +181,7 @@ def main():
         print "No new content. Exiting..."
         return
     else:
-        print "Migrating content from Ansible repo to Azure modules repo..."
+        print "Migrate content from Ansible repo to Azure modules repo"
 
     migrate_contents()
 
