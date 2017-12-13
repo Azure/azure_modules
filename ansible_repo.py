@@ -7,7 +7,7 @@ from time import gmtime, strftime
 from git import Repo
 from git import Actor
 
-github_access_token = ""
+github_access_token = os.environ['GITHUB_ACCESS_TOKEN']
 
 config = json.load(open("./config.json"))
 ansible_repo_path = config["ansible_repo_path"]
