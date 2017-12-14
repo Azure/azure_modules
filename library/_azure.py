@@ -613,6 +613,7 @@ class Wrapper(object):
             except AzureException as e:
                 if not str(e).lower().find("temporary redirect") == -1:
                     time.sleep(5)
+                    pass
                 else:
                     raise e
 
