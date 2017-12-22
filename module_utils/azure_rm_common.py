@@ -21,11 +21,9 @@ import os
 import re
 import sys
 import copy
-import importlib
 import inspect
 import traceback
 
-from packaging.version import Version
 from os.path import expanduser
 
 from ansible.module_utils.basic import AnsibleModule
@@ -72,9 +70,10 @@ AZURE_COMMON_REQUIRED_IF = [
 
 ANSIBLE_USER_AGENT = 'Ansible/{0}'.format(ANSIBLE_VERSION)
 CLOUDSHELL_USER_AGENT_KEY = 'AZURE_HTTP_USER_AGENT'
+VSCODEEXT_USER_AGENT_KEY = 'VSCODEEXT_USER_AGENT'
 
-CIDR_PATTERN = re.compile("(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1"
-                          "[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))")
+CIDR_PATTERN = re.compile(r"(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1"
+                          r"[0-9]{2}|2[0-4][0-9]|25[0-5])(/([0-9]|[1-2][0-9]|3[0-2]))")
 
 AZURE_SUCCESS_STATE = "Succeeded"
 AZURE_FAILED_STATE = "Failed"
@@ -85,6 +84,22 @@ HAS_AZURE_CLI_CORE = True
 
 HAS_MSRESTAZURE = True
 HAS_MSRESTAZURE_EXC = None
+
+try:
+    import importlib
+except ImportError:
+    # This passes the sanity import test, but does not provide a user friendly error message.
+    # Doing so would require catching Exception for all imports of Azure dependencies in modules and module_utils.
+    importlib = None
+
+try:
+    from packaging.version import Version
+    HAS_PACKAGING_VERSION = True
+    HAS_PACKAGING_VERSION_EXC = None
+except ImportError as exc:
+    Version = None
+    HAS_PACKAGING_VERSION = False
+    HAS_PACKAGING_VERSION_EXC = exc
 
 # NB: packaging issue sometimes cause msrestazure not to be installed, check it separately
 try:
@@ -202,6 +217,10 @@ class AzureRMModuleBase(object):
                                     add_file_common_args=add_file_common_args,
                                     supports_check_mode=supports_check_mode,
                                     required_if=merged_required_if)
+
+        if not HAS_PACKAGING_VERSION:
+            self.fail("Do you have packaging installed? Try `pip install packaging`"
+                      "- {0}".format(HAS_PACKAGING_VERSION_EXC))
 
         if not HAS_MSRESTAZURE:
             self.fail("Do you have msrestazure installed? Try `pip install msrestazure`"
@@ -397,8 +416,8 @@ class AzureRMModuleBase(object):
         '''
         try:
             return self.rm_client.resource_groups.get(resource_group)
-        except CloudError:
-            self.fail("Parameter error: resource group {0} not found".format(resource_group))
+        except CloudError as cloud_error:
+            self.fail("Error retrieving resource group {0} - {1}".format(resource_group, cloud_error.message))
         except Exception as exc:
             self.fail("Error retrieving resource group {0} - {1}".format(resource_group, str(exc)))
 
@@ -490,7 +509,7 @@ class AzureRMModuleBase(object):
 
         return None
 
-    def serialize_obj(self, obj, class_name, enum_modules=[]):
+    def serialize_obj(self, obj, class_name, enum_modules=None):
         '''
         Return a JSON representation of an Azure object.
 
@@ -499,6 +518,8 @@ class AzureRMModuleBase(object):
         :param enum_modules: List of module names to build enum dependencies from.
         :return: serialized result
         '''
+        enum_modules = [] if enum_modules is None else enum_modules
+
         dependencies = dict()
         if enum_modules:
             for module_name in enum_modules:
@@ -562,7 +583,7 @@ class AzureRMModuleBase(object):
                 self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
                     azure_object.name, azure_object.provisioning_state, AZURE_SUCCESS_STATE))
 
-    def get_blob_client(self, resource_group_name, storage_account_name):
+    def get_blob_client(self, resource_group_name, storage_account_name, storage_blob_type='block'):
         keys = dict()
         try:
             # Get keys from the storage account
@@ -573,7 +594,12 @@ class AzureRMModuleBase(object):
 
         try:
             self.log('Create blob service')
-            return CloudStorageAccount(storage_account_name, account_keys.keys[0].value).create_block_blob_service()
+            if storage_blob_type == 'page':
+                return CloudStorageAccount(storage_account_name, account_keys.keys[0].value).create_page_blob_service()
+            elif storage_blob_type == 'block':
+                return CloudStorageAccount(storage_account_name, account_keys.keys[0].value).create_block_blob_service()
+            else:
+                raise Exception("Invalid storage blob type defined.")
         except Exception as exc:
             self.fail("Error creating blob service client for storage account {0} - {1}".format(storage_account_name,
                                                                                                 str(exc)))
@@ -704,6 +730,9 @@ class AzureRMModuleBase(object):
         # Add user agent when running from Cloud Shell
         if CLOUDSHELL_USER_AGENT_KEY in os.environ:
             client.config.add_user_agent(os.environ[CLOUDSHELL_USER_AGENT_KEY])
+        # Add user agent when running from VSCode extension
+        if VSCODEEXT_USER_AGENT_KEY in os.environ:
+            client.config.add_user_agent(os.environ[VSCODEEXT_USER_AGENT_KEY])
 
         return client
 
@@ -755,12 +784,14 @@ class AzureRMModuleBase(object):
     def web_client(self):
         self.log('Getting web client')
         if not self._web_client:
-            self._web_client = self.get_mgmt_svc_client(WebSiteManagementClient, base_url=self.base_url)
+            self._web_client = self.get_mgmt_svc_client(WebSiteManagementClient,
+                                                        base_url=self._cloud_environment.endpoints.resource_manager)
         return self._web_client
 
     @property
     def containerservice_client(self):
         self.log('Getting container service client')
         if not self._containerservice_client:
-            self._containerservice_client = self.get_mgmt_svc_client(ContainerServiceClient)
+            self._containerservice_client = self.get_mgmt_svc_client(ContainerServiceClient,
+                                                                     base_url=self._cloud_environment.endpoints.resource_manager)
         return self._containerservice_client
