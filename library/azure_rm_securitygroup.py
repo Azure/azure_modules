@@ -87,11 +87,17 @@ options:
                 default: "*"
             source_address_prefix:
                 description:
-                  - IP address or CIDR from which traffic originates.
+                  - The CIDR or source IP range.
+                  - Asterix C(*) can also be used to match all source IPs.
+                  - Default tags such as C(VirtualNetwork), C(AzureLoadBalancer) and C(Internet) can also be used.
+                  - If this is an ingress rule, specifies where network traffic originates from.
                 default: "*"
             destination_address_prefix:
                 description:
-                  - IP address or CIDR to which traffic is headed.
+                  - The destination address prefix.
+                  - CIDR or destination IP range.
+                  - Asterix C(*) can also be used to match all source IPs.
+                  - Default tags such as C(VirtualNetwork), C(AzureLoadBalancer) and C(Internet) can also be used.
                 default: "*"
             access:
                 description:
@@ -426,6 +432,9 @@ def compare_rules(r, rule):
         if rule['direction'] != r['direction']:
             changed = True
             r['direction'] = rule['direction']
+        if rule['source_address_prefix'] != str(r['source_address_prefix']):
+            changed = True
+            r['source_address_prefix'] = rule['source_address_prefix']
     return matched, changed
 
 
@@ -437,11 +446,11 @@ def create_rule_instance(rule):
     :return: SecurityRule
     '''
     return SecurityRule(
-        rule['protocol'],
-        rule['source_address_prefix'],
-        rule['destination_address_prefix'],
-        rule['access'],
-        rule['direction'],
+        protocol=rule['protocol'],
+        source_address_prefix=rule['source_address_prefix'],
+        destination_address_prefix=rule['destination_address_prefix'],
+        access=rule['access'],
+        direction=rule['direction'],
         id=rule.get('id', None),
         description=rule.get('description', None),
         source_port_range=rule.get('source_port_range', None),
