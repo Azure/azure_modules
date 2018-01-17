@@ -44,6 +44,7 @@ AZURE_COMMON_ARGS = dict(
     ad_user=dict(type='str', no_log=True),
     password=dict(type='str', no_log=True),
     cloud_environment=dict(type='str'),
+    cert_validation_mode=dict(type='str', choices=['validate', 'ignore'])
     # debug=dict(type='bool', default=False),
 )
 
@@ -57,6 +58,7 @@ AZURE_CREDENTIAL_ENV_MAPPING = dict(
     ad_user='AZURE_AD_USER',
     password='AZURE_PASSWORD',
     cloud_environment='AZURE_CLOUD_ENVIRONMENT',
+    cert_validation_mode='AZURE_CERT_VALIDATION_MODE',
 )
 
 AZURE_TAG_ARGS = dict(
@@ -113,8 +115,6 @@ try:
     from msrestazure.azure_exceptions import CloudError
     from msrestazure.tools import resource_id, is_valid_resource_id
     from msrestazure import azure_cloud
-    from azure.mgmt.network.models import PublicIPAddress, NetworkSecurityGroup, SecurityRule, NetworkInterface, \
-        NetworkInterfaceIPConfiguration, Subnet
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
     from azure.mgmt.network.version import VERSION as network_client_version
     from azure.mgmt.storage.version import VERSION as storage_client_version
@@ -257,6 +257,13 @@ class AzureRMModuleBase(object):
             self.fail("Failed to get credentials. Either pass as parameters, set environment variables, "
                       "or define a profile in ~/.azure/credentials or be logged using AzureCLI.")
 
+        # cert validation mode precedence: module-arg, credential profile, env, "validate"
+        self._cert_validation_mode = self.module.params['cert_validation_mode'] or self.credentials.get('cert_validation_mode') or \
+            os.environ.get('AZURE_CERT_VALIDATION_MODE') or 'validate'
+
+        if self._cert_validation_mode not in ['validate', 'ignore']:
+            self.fail('invalid cert_validation_mode: {0}'.format(self._cert_validation_mode))
+
         # if cloud_environment specified, look up/build Cloud object
         raw_cloud_env = self.credentials.get('cloud_environment')
         if not raw_cloud_env:
@@ -288,7 +295,8 @@ class AzureRMModuleBase(object):
             self.azure_credentials = ServicePrincipalCredentials(client_id=self.credentials['client_id'],
                                                                  secret=self.credentials['secret'],
                                                                  tenant=self.credentials['tenant'],
-                                                                 cloud_environment=self._cloud_environment)
+                                                                 cloud_environment=self._cloud_environment,
+                                                                 verify=self._cert_validation_mode == 'validate')
 
         elif self.credentials.get('ad_user') is not None and self.credentials.get('password') is not None:
             tenant = self.credentials.get('tenant')
@@ -298,7 +306,8 @@ class AzureRMModuleBase(object):
             self.azure_credentials = UserPassCredentials(self.credentials['ad_user'],
                                                          self.credentials['password'],
                                                          tenant=tenant,
-                                                         cloud_environment=self._cloud_environment)
+                                                         cloud_environment=self._cloud_environment,
+                                                         verify=self._cert_validation_mode == 'validate')
         else:
             self.fail("Failed to authenticate with provided credentials. Some attributes were missing. "
                       "Credentials must include client_id, secret and tenant or ad_user and password or "
@@ -638,7 +647,7 @@ class AzureRMModuleBase(object):
             self.check_provisioning_state(pip)
             return pip
 
-        params = PublicIPAddress(
+        params = self.network_models.PublicIPAddress(
             location=location,
             public_ip_allocation_method=allocation_method,
         )
@@ -678,7 +687,7 @@ class AzureRMModuleBase(object):
             self.check_provisioning_state(group)
             return group
 
-        parameters = NetworkSecurityGroup()
+        parameters = self.network_models.NetworkSecurityGroup()
         parameters.location = location
 
         if not open_ports:
@@ -686,17 +695,17 @@ class AzureRMModuleBase(object):
             if os_type == 'Linux':
                 # add an inbound SSH rule
                 parameters.security_rules = [
-                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow SSH Access',
-                                 source_port_range='*', destination_port_range='22', priority=100, name='SSH')
+                    self.network_models.SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow SSH Access',
+                                                     source_port_range='*', destination_port_range='22', priority=100, name='SSH')
                 ]
                 parameters.location = location
             else:
                 # for windows add inbound RDP and WinRM rules
                 parameters.security_rules = [
-                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow RDP port 3389',
-                                 source_port_range='*', destination_port_range='3389', priority=100, name='RDP01'),
-                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow WinRM HTTPS port 5986',
-                                 source_port_range='*', destination_port_range='5986', priority=101, name='WinRM01'),
+                    self.network_models.SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow RDP port 3389',
+                                                     source_port_range='*', destination_port_range='3389', priority=100, name='RDP01'),
+                    self.network_models.SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow WinRM HTTPS port 5986',
+                                                     source_port_range='*', destination_port_range='5986', priority=101, name='WinRM01'),
                 ]
         else:
             # Open custom ports
@@ -706,8 +715,8 @@ class AzureRMModuleBase(object):
                 priority += 1
                 rule_name = "Rule_{0}".format(priority)
                 parameters.security_rules.append(
-                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', source_port_range='*',
-                                 destination_port_range=str(port), priority=priority, name=rule_name)
+                    self.network_models.SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', source_port_range='*',
+                                                     destination_port_range=str(port), priority=priority, name=rule_name)
                 )
 
         self.log('Creating default security group {0}'.format(security_group_name))
@@ -719,6 +728,10 @@ class AzureRMModuleBase(object):
             self.fail("Error creating default security rule {0} - {1}".format(security_group_name, str(exc)))
 
         return self.get_poller_result(poller)
+
+    @staticmethod
+    def _validation_ignore_callback(session, global_config, local_config, **kwargs):
+        session.verify = False
 
     def get_mgmt_svc_client(self, client_type, base_url=None, api_version=None):
         self.log('Getting management service client {0}'.format(client_type.__name__))
@@ -742,6 +755,9 @@ class AzureRMModuleBase(object):
         if VSCODEEXT_USER_AGENT_KEY in os.environ:
             client.config.add_user_agent(os.environ[VSCODEEXT_USER_AGENT_KEY])
 
+        if self._cert_validation_mode == 'ignore':
+            client.config.session_configuration_callback = self._validation_ignore_callback
+
         return client
 
     @property
@@ -754,6 +770,11 @@ class AzureRMModuleBase(object):
         return self._storage_client
 
     @property
+    def storage_models(self):
+        self.log('Getting storage models...')
+        return StorageManagementClient.models("2017-10-01")
+
+    @property
     def network_client(self):
         self.log('Getting network client')
         if not self._network_client:
@@ -761,6 +782,11 @@ class AzureRMModuleBase(object):
                                                             base_url=self._cloud_environment.endpoints.resource_manager,
                                                             api_version='2017-06-01')
         return self._network_client
+
+    @property
+    def network_models(self):
+        self.log("Getting network models...")
+        return NetworkManagementClient.models("2017-06-01")
 
     @property
     def rm_client(self):
@@ -772,6 +798,11 @@ class AzureRMModuleBase(object):
         return self._resource_client
 
     @property
+    def rm_models(self):
+        self.log("Getting resource manager models")
+        return ResourceManagementClient.models("2017-05-10")
+
+    @property
     def compute_client(self):
         self.log('Getting compute client')
         if not self._compute_client:
@@ -779,6 +810,11 @@ class AzureRMModuleBase(object):
                                                             base_url=self._cloud_environment.endpoints.resource_manager,
                                                             api_version='2017-03-30')
         return self._compute_client
+
+    @property
+    def compute_models(self):
+        self.log("Getting compute models")
+        return ComputeManagementClient.models("2017-03-30")
 
     @property
     def dns_client(self):
