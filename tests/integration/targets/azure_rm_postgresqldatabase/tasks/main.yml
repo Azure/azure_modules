@@ -11,10 +11,10 @@
       name: PGSQLS100
       tier: basic
     location: westus
+    storage_mb: 51200
     enforce_ssl: True
     admin_username: zimxyz
     admin_password: Testpasswordxyz12!
-    storage_mb: 51200
 
 - name: Create instance of PostgreSQL Database -- check mode
   azure_rm_postgresqldatabase:
