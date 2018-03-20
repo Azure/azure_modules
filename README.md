@@ -44,7 +44,7 @@ Installation
 
    On macOS, the existing SDKs may be located in folders like `/Users/<your-user-name>/Library/Python/2.7/lib/python/site-packages` or `/Library/Python/2.7/site-packages`. Like Ubuntu, the former is an user folder and the latter is a system folder.
 
-   One way to figure out the correct `site-packages` path is to check the details of existing packages, say `azure-mgmt-storage` by running below command.
+   One way to figure out the correct `site-packages` path is to check the details of existing packages, say `azure-mgmt-storage` by running command below:
 
   ``` bash
   $ pip show azure-mgmt-storage
