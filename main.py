@@ -33,7 +33,7 @@ def clone_azure_repo():
     create_clean_dir(azure_repo_path)
     global local_azure_repo
     azure_repo = Repo()
-    local_azure_repo = azure_repo.clone_from("https://ZhijunZhao:" + github_access_token + "@github.com/Azure/azure_modules.git", azure_repo_path)
+    local_azure_repo = azure_repo.clone_from("https://ansibleazurebot:" + github_access_token + "@github.com/Azure/azure_modules.git", azure_repo_path)
 
 
 def has_new_content(repo, branch_name, log_file):
