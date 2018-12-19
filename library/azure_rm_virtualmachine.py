@@ -68,6 +68,12 @@ options:
             - Toggle that controls if the machine is allocated/deallocated, only useful with state='present'.
         default: True
         type: bool
+    generalized:
+        description:
+            - Use with state 'present' to generalize the machine. Set to true to generalize the machine.
+            - Please note that this operation is irreversible.
+        type: bool
+        version_added: "2.8"
     restarted:
         description:
             - Use with state 'present' to restart a running VM.
@@ -496,9 +502,9 @@ EXAMPLES = '''
 
 RETURN = '''
 powerstate:
-    description: Indicates if the state is running, stopped, deallocated
+    description: Indicates if the state is running, stopped, deallocated, generalized
     returned: always
-    type: string
+    type: str
     example: running
 deleted_vhd_uris:
     description: List of deleted Virtual Hard Disk URIs.
@@ -666,6 +672,7 @@ import re
 try:
     from msrestazure.azure_exceptions import CloudError
     from msrestazure.tools import parse_resource_id
+    from msrest.polling import LROPoller
 except ImportError:
     # This is handled in azure_rm_common
     pass
@@ -727,6 +734,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             allocated=dict(type='bool', default=True),
             restarted=dict(type='bool', default=False),
             started=dict(type='bool', default=True),
+            generalized=dict(type='bool', default=False),
             data_disks=dict(type='list'),
             plan=dict(type='dict'),
             accept_terms=dict(type='bool', default=False)
@@ -765,6 +773,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.allocated = None
         self.restarted = None
         self.started = None
+        self.generalized = None
         self.differences = None
         self.data_disks = None
         self.plan = None
@@ -954,6 +963,10 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     self.log("CHANGED: virtual machine {0} running and requested state 'stopped'".format(self.name))
                     changed = True
                     powerstate_change = 'poweroff'
+                elif self.generalized and vm_dict['powerstate'] != 'generalized':
+                    self.log("CHANGED: virtual machine {0} requested to be 'generalized'".format(self.name))
+                    changed = True
+                    powerstate_change = 'generalized'
 
                 self.differences = differences
 
@@ -1192,12 +1205,32 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                         # pass if the availability set is not set
                         pass
 
-                    vm_resource = self.compute_models.VirtualMachine(
-                        location=vm_dict['location'],
-                        os_profile=self.compute_models.OSProfile(
+                    if 'imageReference' in vm_dict['properties']['storageProfile'].keys():
+                        if 'id' in vm_dict['properties']['storageProfile']['imageReference'].keys():
+                            image_reference = self.compute_models.ImageReference(
+                                id=vm_dict['properties']['storageProfile']['imageReference']['id']
+                            )
+                        else:
+                            image_reference = self.compute_models.ImageReference(
+                                publisher=vm_dict['properties']['storageProfile']['imageReference'].get('publisher'),
+                                offer=vm_dict['properties']['storageProfile']['imageReference'].get('offer'),
+                                sku=vm_dict['properties']['storageProfile']['imageReference'].get('sku'),
+                                version=vm_dict['properties']['storageProfile']['imageReference'].get('version')
+                            )
+                    else:
+                        image_reference = None
+
+                    if 'osProfile' in vm_dict['properties']:
+                        os_profile = self.compute_models.OSProfile(
                             admin_username=vm_dict['properties'].get('osProfile', {}).get('adminUsername'),
                             computer_name=vm_dict['properties'].get('osProfile', {}).get('computerName')
-                        ),
+                        )
+                    else:
+                        os_profile = None
+
+                    vm_resource = self.compute_models.VirtualMachine(
+                        location=vm_dict['location'],
+                        os_profile=os_profile,
                         hardware_profile=self.compute_models.HardwareProfile(
                             vm_size=vm_dict['properties']['hardwareProfile'].get('vmSize')
                         ),
@@ -1211,14 +1244,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                                 caching=vm_dict['properties']['storageProfile']['osDisk'].get('caching'),
                                 disk_size_gb=vm_dict['properties']['storageProfile']['osDisk'].get('diskSizeGB')
                             ),
-                            image_reference=self.compute_models.ImageReference(
-                                id=vm_dict['properties']['storageProfile']['imageReference']['id'],
-                            ) if 'id' in vm_dict['properties']['storageProfile']['imageReference'].keys() else self.compute_models.ImageReference(
-                                publisher=vm_dict['properties']['storageProfile']['imageReference'].get('publisher'),
-                                offer=vm_dict['properties']['storageProfile']['imageReference'].get('offer'),
-                                sku=vm_dict['properties']['storageProfile']['imageReference'].get('sku'),
-                                version=vm_dict['properties']['storageProfile']['imageReference'].get('version')
-                            ),
+                            image_reference=image_reference
                         ),
                         availability_set=availability_set_resource,
                         network_profile=self.compute_models.NetworkProfile(
@@ -1230,17 +1256,17 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                         vm_resource.tags = vm_dict['tags']
 
                     # Add custom_data, if provided
-                    if vm_dict['properties']['osProfile'].get('customData'):
+                    if vm_dict['properties'].get('osProfile', {}).get('customData'):
                         custom_data = vm_dict['properties']['osProfile']['customData']
                         # Azure SDK (erroneously?) wants native string type for this
                         vm_resource.os_profile.custom_data = to_native(base64.b64encode(to_bytes(custom_data)))
 
                     # Add admin password, if one provided
-                    if vm_dict['properties']['osProfile'].get('adminPassword'):
+                    if vm_dict['properties'].get('osProfile', {}).get('adminPassword'):
                         vm_resource.os_profile.admin_password = vm_dict['properties']['osProfile']['adminPassword']
 
                     # Add linux configuration, if applicable
-                    linux_config = vm_dict['properties']['osProfile'].get('linuxConfiguration')
+                    linux_config = vm_dict['properties'].get('osProfile', {}).get('linuxConfiguration')
                     if linux_config:
                         ssh_config = linux_config.get('ssh', None)
                         vm_resource.os_profile.linux_configuration = self.compute_models.LinuxConfiguration(
@@ -1298,6 +1324,9 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
                 elif powerstate_change == 'deallocated':
                     self.deallocate_vm()
+                elif powerstate_change == 'generalized':
+                    self.power_off_vm()
+                    self.generalize_vm()
 
                 self.results['ansible_facts']['azure_vm'] = self.serialize_vm(self.get_vm())
 
@@ -1343,6 +1372,9 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         if vm.instance_view:
             result['powerstate'] = next((s.code.replace('PowerState/', '')
                                          for s in vm.instance_view.statuses if s.code.startswith('PowerState')), None)
+            for s in vm.instance_view.statuses:
+                if s.code.lower() == "osstate/generalized":
+                    result['powerstate'] = 'generalized'
 
         # Expand network interfaces to include config properties
         for interface in vm.network_profile.network_interfaces:
@@ -1412,6 +1444,17 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             self.get_poller_result(poller)
         except Exception as exc:
             self.fail("Error deallocating virtual machine {0} - {1}".format(self.name, str(exc)))
+        return True
+
+    def generalize_vm(self):
+        self.results['actions'].append("Generalize virtual machine {0}".format(self.name))
+        self.log("Generalize virtual machine {0}".format(self.name))
+        try:
+            response = self.compute_client.virtual_machines.generalize(self.resource_group, self.name)
+            if isinstance(response, LROPoller):
+                self.get_poller_result(response)
+        except Exception as exc:
+            self.fail("Error generalizing virtual machine {0} - {1}".format(self.name, str(exc)))
         return True
 
     def delete_vm(self, vm):
