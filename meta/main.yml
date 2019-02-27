@@ -4,7 +4,7 @@ galaxy_info:
   author: ZhijunZhao
   company: Microsoft
   description: "latest Azure modules for provisioning Azure resources"
-  galaxy_tags: ["Azure", "cloud", "system", "development", "networking", "docker", "container", "kubernetes"]
+  galaxy_tags: ["azure", "cloud", "system", "development", "networking", "docker", "container", "kubernetes"]
   license: MIT
   min_ansible_version: "2.5.0"
   platforms:
@@ -29,3 +29,5 @@ galaxy_info:
       versions: 
         - 2012R2
 
+  cloud_platforms:
+    - Azure
