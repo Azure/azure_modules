@@ -1,9 +1,24 @@
 language: python
 python: '2.7'
 
-branches:
-  only:
-    - master
+env:
+  global:
+    - ANSIBLE_VERSION=latest
+
+install:
+  - if [ "$ANSIBLE_VERSION" == "latest" ]; then pip install ansible[azure]; else pip
+    install ansible[azure]==$ANSIBLE_VERSION; fi
+  - "{ echo '[defaults]'; echo 'roles_path = ../'; echo 'lookup_plugins = ./tests/integration/targets/azure_rm_keyvaultkey/lookup_plugins'; } >> ansible.cfg"
+  - ansible --version
+  - pip install -I -r ./files/requirements-azure.txt
+  - pip freeze
+  - git remote set-branches --add origin master
+  - git fetch
+
+script:
+  - echo 'send notifiication'
 
 notifications:
   webhooks: https://galaxy.ansible.com/api/v1/notifications/
+ 
+ 
