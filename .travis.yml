@@ -5,6 +5,10 @@ env:
   global:
     - ANSIBLE_VERSION=latest
 
+branches:
+  only:
+    - master
+
 install:
   - if [ "$ANSIBLE_VERSION" == "latest" ]; then pip install ansible[azure]; else pip
     install ansible[azure]==$ANSIBLE_VERSION; fi
