@@ -15,19 +15,19 @@ Installation
 1. Install the role.
 
   ``` bash
-  $ ansible-galaxy install Azure.azure_modules
+  $ ansible-galaxy install azure.azure_modules
   ```
 
 2. Upgrade Azure Python SDKs required by new Azure modules.
 
   ``` bash
-  $ pip install -r ~/.ansible/roles/Azure.azure_modules/files/requirements-azure.txt
+  $ pip install -r ~/.ansible/roles/azure.azure_modules/files/requirements-azure.txt
   ```
     
   &nbsp;&nbsp;&nbsp;&nbsp;or
       
   ``` bash
-  $ sudo pip install -r ~/.ansible/roles/Azure.azure_modules/files/requirements-azure.txt
+  $ sudo pip install -r ~/.ansible/roles/azure.azure_modules/files/requirements-azure.txt
   ```
 
    Several reasons for installing Python SDKs are listed here.
@@ -82,7 +82,7 @@ Example Playbook
 
     - hosts: localhost
       roles:
-        - { role: Azure.azure_modules }
+        - { role: azure.azure_modules }
       tasks:
       - name: create storage account
         azure_rm_storageaccount:
