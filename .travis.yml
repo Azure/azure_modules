@@ -8,6 +8,7 @@ env:
 branches:
   only:
     - master
+    - /^\d+\.\d+(\.\d+)?(-\S*)?$/
 
 install:
   - if [ "$ANSIBLE_VERSION" == "latest" ]; then pip install ansible[azure]; else pip
