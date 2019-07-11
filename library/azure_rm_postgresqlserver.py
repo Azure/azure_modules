@@ -56,6 +56,20 @@ options:
         description:
             - The maximum storage allowed for a server.
         type: int
+    geo_redundant_backup:
+        description:
+            - Choose between locally redundant(default) or geo-redundant backup
+        type: bool
+        default: False
+    backup_retention_days:
+        description:
+            - Backup retention period between 7 and 35 days. 7 days by default if not set
+        type: int
+    storage_autogrow:
+        description:
+                - The storage automatically grows when close to be full.
+        type: bool
+        default: False
     version:
         description:
             - Server version.
@@ -176,6 +190,17 @@ class AzureRMPostgreSqlServers(AzureRMModuleBase):
             storage_mb=dict(
                 type='int'
             ),
+            geo_redundant_backup=dict(
+                type='bool',
+                default=False
+            ),
+            backup_retention_days=dict(
+                type='int',
+            ),
+            storage_autogrow=dict(
+                type='bool',
+                default=False
+            ),
             version=dict(
                 type='str',
                 choices=['9.5', '9.6', '10']
@@ -234,6 +259,14 @@ class AzureRMPostgreSqlServers(AzureRMModuleBase):
                     self.parameters["location"] = kwargs[key]
                 elif key == "storage_mb":
                     self.parameters.setdefault("properties", {}).setdefault("storage_profile", {})["storage_mb"] = kwargs[key]
+                elif key == "geo_redundant_backup":
+                    self.parameters.setdefault("properties", {}).setdefault("storage_profile", {})["geo_redundant_backup"] = \
+                        'Enabled' if kwargs[key] else 'Disabled'
+                elif key == "backup_retention_days":
+                    self.parameters.setdefault("properties", {}).setdefault("storage_profile", {})["backup_retention_days"] = kwargs[key]
+                elif key == "storage_autogrow":
+                    self.parameters.setdefault("properties", {}).setdefault("storage_profile", {})["storage_autogrow"] = \
+                        'Enabled' if kwargs[key] else 'Disabled'
                 elif key == "version":
                     self.parameters.setdefault("properties", {})["version"] = kwargs[key]
                 elif key == "enforce_ssl":
@@ -245,7 +278,6 @@ class AzureRMPostgreSqlServers(AzureRMModuleBase):
                 elif key == "admin_password":
                     self.parameters.setdefault("properties", {})["administrator_login_password"] = kwargs[key]
 
-        old_response = None
         response = None
 
         resource_group = self.get_resource_group(self.resource_group)
@@ -312,11 +344,11 @@ class AzureRMPostgreSqlServers(AzureRMModuleBase):
         return self.results
 
     def create_update_postgresqlserver(self):
-        '''
+        """
         Creates or updates PostgreSQL Server with the specified configuration.
 
         :return: deserialized PostgreSQL Server instance state dictionary
-        '''
+        """
         self.log("Creating / Updating the PostgreSQL Server instance {0}".format(self.name))
 
         try:
@@ -340,11 +372,11 @@ class AzureRMPostgreSqlServers(AzureRMModuleBase):
         return response.as_dict()
 
     def delete_postgresqlserver(self):
-        '''
+        """
         Deletes specified PostgreSQL Server instance in the specified subscription and resource group.
 
         :return: True
-        '''
+        """
         self.log("Deleting the PostgreSQL Server instance {0}".format(self.name))
         try:
             response = self.postgresql_client.servers.delete(resource_group_name=self.resource_group,
@@ -356,13 +388,14 @@ class AzureRMPostgreSqlServers(AzureRMModuleBase):
         return True
 
     def get_postgresqlserver(self):
-        '''
+        """
         Gets the properties of the specified PostgreSQL Server.
 
         :return: deserialized PostgreSQL Server instance state dictionary
-        '''
+        """
         self.log("Checking if the PostgreSQL Server instance {0} is present".format(self.name))
         found = False
+        response = dict()
         try:
             response = self.postgresql_client.servers.get(resource_group_name=self.resource_group,
                                                           server_name=self.name)
