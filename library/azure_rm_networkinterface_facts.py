@@ -155,6 +155,10 @@ networkinterfaces:
                 load_balancer_backend_address_pools:
                     description:
                         - List of existing load-balancer backend address pools to associate with the network interface.
+                load_balancer_inbound_nat_rules:
+                    description:
+                        - List of existing load-balancer inbound nat rules to associate with the network interface.
+                    version_added: '2.9'
                 primary:
                     description:
                         - Whether the IP configuration is the primary one in the list.
@@ -225,6 +229,8 @@ def nic_to_dict(nic):
             primary=config.primary,
             load_balancer_backend_address_pools=([item.id for item in config.load_balancer_backend_address_pools]
                                                  if config.load_balancer_backend_address_pools else None),
+            load_balancer_inbound_nat_rules=([item.id for item in config.load_balancer_inbound_nat_rules]
+                                                             if config.load_balancer_inbound_nat_rules else None),
             public_ip_address=config.public_ip_address.id if config.public_ip_address else None,
             public_ip_allocation_method=config.public_ip_address.public_ip_allocation_method if config.public_ip_address else None,
             application_security_groups=([asg.id for asg in config.application_security_groups]

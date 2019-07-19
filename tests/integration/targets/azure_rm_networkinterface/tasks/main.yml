@@ -521,6 +521,138 @@
       name: "{{ nic_name1 }}"
       state: absent
 
+- name: create public ip
+  azure_rm_publicipaddress:
+    name: "pip2{{ rpfx }}"
+    resource_group: '{{ resource_group }}'
+
+- name: create load balancer with multiple parameters (Inbound Nat Rules)
+  azure_rm_loadbalancer:
+    resource_group: '{{ resource_group }}'
+    name: "lb2{{ rpfx }}"
+    frontend_ip_configurations:
+      - name: frontendipconf0
+        public_ip_address: "pip2{{ rpfx }}"
+    backend_address_pools:
+      - name: backendaddrpool0
+      - name: backendaddrpool1
+    probes:
+      - name: prob0
+        port: 80
+    inbound_nat_rules:
+      - name: lbrnatrule0
+        backend_port: 9080
+        frontend_port: 9080
+        frontend_ip_configuration: frontendipconf0
+      - name: lbrnatrule1
+        backend_port: 9081
+        frontend_port: 9081
+        frontend_ip_configuration: frontendipconf0
+  register: lb2
+
+- name: Create NIC (idempotent)
+  azure_rm_networkinterface:
+      resource_group: "{{ resource_group }}"
+      name: "tn2{{ rpfx }}"
+      virtual_network: "{{ vn.state.id }}"
+      subnet: "tn{{ rpfx }}"
+      create_with_security_group: False
+      public_ip: False
+  register: output
+
+- assert:
+    that:
+      - output.changed
+
+- name: Get fact of the new created NIC
+  azure_rm_networkinterface_facts:
+    resource_group: "{{ resource_group }}"
+    name: "tn2{{ rpfx }}"
+  register: facts
+
+- name: Update NIC
+  azure_rm_networkinterface:
+      resource_group: "{{ resource_group }}"
+      name: "tn2{{ rpfx }}"
+      virtual_network: "{{ vn.state.id }}"
+      subnet: "tn{{ rpfx }}"
+      enable_accelerated_networking: True
+      enable_ip_forwarding: True
+      security_group: "tn{{ rpfx }}sg"
+      dns_servers:
+        - 8.9.10.11
+        - 7.8.9.10
+      ip_configurations:
+          - name: "{{ facts.networkinterfaces[0].ip_configurations[0].name }}"
+            private_ip_address: "{{ facts.networkinterfaces[0].ip_configurations[0].private_ip_address }}"
+            private_ip_allocation_method: "{{ facts.networkinterfaces[0].ip_configurations[0].private_ip_allocation_method }}"
+            primary: "{{ facts.networkinterfaces[0].ip_configurations[0].primary }}"
+          - name: ipconfig1
+            public_ip_name: "tn{{ rpfx }}"
+            load_balancer_inbound_nat_rules:
+              - "{{ lb2.state.inbound_nat_rules[0].id }}"
+              - name: lbrnatrule1
+                load_balancer: "lb2{{ rpfx }}"
+  register: output
+
+- assert:
+    that:
+      - output.changed
+      - output.state.ip_configurations | json_query('[?name==`ipconfig1`]')
+      - output.state.ip_configurations | json_query('[?name==`ipconfig1`].load_balancer_inbound_nat_rules')
+
+- name: Complicated NIC (idempontent)
+  azure_rm_networkinterface:
+      resource_group: "{{ resource_group }}"
+      name: "tn2{{ rpfx }}"
+      virtual_network: "{{ vn.state.id }}"
+      subnet: "tn{{ rpfx }}"
+      enable_accelerated_networking: True
+      security_group: "tn{{ rpfx }}sg"
+      enable_ip_forwarding: True
+      dns_servers:
+        - 8.9.10.11
+        - 7.8.9.10
+      ip_configurations:
+          - name: "{{ facts.networkinterfaces[0].ip_configurations[0].name }}"
+            private_ip_address: "{{ facts.networkinterfaces[0].ip_configurations[0].private_ip_address }}"
+            private_ip_allocation_method: "{{ facts.networkinterfaces[0].ip_configurations[0].private_ip_allocation_method }}"
+            primary: "{{ facts.networkinterfaces[0].ip_configurations[0].primary }}"
+          - name: ipconfig1
+            public_ip_name: "tn{{ rpfx }}"
+            load_balancer_inbound_nat_rules:
+              - "{{ lb2.state.inbound_nat_rules[0].id }}"
+              - name: lbrnatrule1
+                load_balancer: "lb2{{ rpfx }}"
+  register: output
+
+- assert:
+    that:
+      - not output.changed
+
+- name: Delete the NIC (idempotent)
+  azure_rm_networkinterface:
+      resource_group: "{{ resource_group }}"
+      name: "tn2{{ rpfx }}"
+      state: absent
+  register: output
+
+- assert:
+    that:
+      - not output.changed
+
+- name: delete load balancer
+  azure_rm_loadbalancer:
+    resource_group: '{{ resource_group }}'
+    name: "lb2{{ rpfx }}"
+    state: absent
+
+- name: delete public ip
+  azure_rm_publicipaddress:
+    name: "pip2{{ rpfx }}"
+    resource_group: '{{ resource_group }}'
+    state: absent
+
 - name: Delete the application security group (check mode)
   azure_rm_applicationsecuritygroup:
       resource_group: "{{ resource_group }}"
