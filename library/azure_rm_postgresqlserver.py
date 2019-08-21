@@ -63,6 +63,7 @@ options:
             - '9.5'
             - '9.6'
             - '10'
+            - '11'
     enforce_ssl:
         description:
             - Enable SSL enforcement.
@@ -178,7 +179,7 @@ class AzureRMPostgreSqlServers(AzureRMModuleBase):
             ),
             version=dict(
                 type='str',
-                choices=['9.5', '9.6', '10']
+                choices=['9.5', '9.6', '10', '11']
             ),
             enforce_ssl=dict(
                 type='bool',
