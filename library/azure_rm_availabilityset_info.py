@@ -105,7 +105,6 @@ azure_availabilityset:
             sample: { env: sandbox }
 '''
 
-from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.azure_rm_common import AzureRMModuleBase
 
 try:
@@ -130,7 +129,7 @@ class AzureRMAvailabilitySetInfo(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            ansible_facts=dict(
+            ansible_info=dict(
                 azure_availabilitysets=[]
             )
         )
@@ -138,11 +137,6 @@ class AzureRMAvailabilitySetInfo(AzureRMModuleBase):
         self.name = None
         self.resource_group = None
         self.tags = None
-
-        module = AnsibleModule(self.module_args)
-        is_old_facts = module._name == 'azure_rm_availabilityset_facts'
-        if is_old_facts:
-            module.deprecate("The 'azure_rm_availabilityset_facts' module has been renamed to 'azure_rm_availabilityset_info'", version='2.13')
 
         super(AzureRMAvailabilitySetInfo, self).__init__(
             derived_arg_spec=self.module_args,
@@ -152,15 +146,19 @@ class AzureRMAvailabilitySetInfo(AzureRMModuleBase):
 
     def exec_module(self, **kwargs):
 
+        is_old_facts = self.module._name == 'azure_rm_availabilityset_facts'
+        if is_old_facts:
+            self.module.deprecate("The 'azure_rm_availabilityset_facts' module has been renamed to 'azure_rm_availabilityset_info'", version='2.13')
+
         for key in self.module_args:
             setattr(self, key, kwargs[key])
 
         if self.name and not self.resource_group:
             self.fail("Parameter error: resource group required when filtering by name.")
         if self.name:
-            self.results['ansible_facts']['azure_availabilitysets'] = self.get_item()
+            self.results['ansible_info']['azure_availabilitysets'] = self.get_item()
         else:
-            self.results['ansible_facts']['azure_availabilitysets'] = self.list_items()
+            self.results['ansible_info']['azure_availabilitysets'] = self.list_items()
 
         return self.results
 
