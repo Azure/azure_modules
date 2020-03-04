@@ -74,6 +74,9 @@ options:
                 description:
                     - The VM Size of each of the Agent Pool VM's (e.g. C(Standard_F1) / C(Standard_D2v2)).
                 required: true
+            vnet_subnet_id:
+                description:
+                    - Id of subnet for Agent Pool VM's Network Interfaces
             os_disk_size_gb:
                 description:
                     - Size of the OS disk.
@@ -195,7 +198,7 @@ options:
                         type: bool
                     subnet_resource_id:
                         description:
-                            - Subnet associdated to the cluster.
+                            - Subnet associated to the cluster.
         version_added: "2.8"
 
 extends_documentation_fragment:
