@@ -173,7 +173,7 @@ id:
     type: dict
 state:
     description:
-        - Current state of the managed disk.
+        - Current state of the managed disk, if attached to a VM then including the LUN ID of the disk within the VM.
     returned: always
     type: dict
 changed:
@@ -338,6 +338,26 @@ class AzureRMManagedDisk(AzureRMModuleBase):
 
         self.results['changed'] = changed
         self.results['state'] = result
+
+        # If attached to a VM, extend state with LUN ID, VM name and total number of attached LUNs
+        disk_instance_after_actions = self.get_managed_disk()
+        # If the disk exists and is attached to a VM:
+        if disk_instance_after_actions != None and parse_resource_id(disk_instance_after_actions.get('managed_by', '')).get('name') != None and parse_resource_id(disk_instance_after_actions.get('managed_by', '')).get('name') != '':
+            vm_name = parse_resource_id(disk_instance_after_actions.get('managed_by', '')).get('name')
+            vm = self._get_vm(vm_name)
+            luns = ([d for d in vm.storage_profile.data_disks if d.name == self.name]
+                    if vm.storage_profile.data_disks else [])
+            luns_total = len(vm.storage_profile.data_disks) if vm.storage_profile.data_disks else 0
+            if luns == None or len(luns) != 1:
+                self.fail("Error getting virtual machines LUN list; VM: {0} - LUN list: {1}".format(vm_name, str(luns)))
+            else:
+                self.results['state']['managed_by_name'] = vm_name
+                self.results['state']['managed_by_lun_id'] = luns[0].lun
+                self.results['state']['managed_by_luns_total_number'] = luns_total
+        elif isinstance(self.results.get('state'), dict): # disk exists, but not attached to a VM
+            self.results['state']['managed_by_name'] = None
+            self.results['state']['managed_by_lun_id'] = None
+            self.results['state']['managed_by_luns_total_number'] = None        
         return self.results
 
     def attach(self, vm_name, disk):
