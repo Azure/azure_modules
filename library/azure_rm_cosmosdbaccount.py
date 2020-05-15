@@ -110,6 +110,11 @@ options:
         description:
             - Enable Gremlin.
         type: bool
+    enable_mongo:
+        description:
+            - Enable MongoDB.
+        type: bool
+
     virtual_network_rules:
         description:
             - List of Virtual Network ACL rules configured for the Cosmos DB account.
@@ -276,6 +281,9 @@ class AzureRMCosmosDBAccount(AzureRMModuleBase):
             enable_cassandra=dict(
                 type='bool'
             ),
+            enable_mongo=dict(
+                type='bool'
+            ),
             enable_table=dict(
                 type='bool'
             ),
@@ -344,6 +352,8 @@ class AzureRMCosmosDBAccount(AzureRMModuleBase):
             self.parameters['capabilities'].append({'name': 'EnableTable'})
         if self.parameters.pop('enable_gremlin', False):
             self.parameters['capabilities'].append({'name': 'EnableGremlin'})
+        if self.parameters.pop('enable_mongo', False):
+            self.parameters['capabilities'].append({'name': 'EnableMongo'})
 
         for rule in self.parameters.get('virtual_network_rules', []):
             subnet = rule.pop('subnet')
