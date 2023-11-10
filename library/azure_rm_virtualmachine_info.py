@@ -414,11 +414,14 @@ class AzureRMVirtualMachineInfo(AzureRMModuleBase):
                        result['properties']['diagnosticsProfile']['bootDiagnostics']['enabled'] or False,
             'storage_uri': 'diagnosticsProfile' in result['properties'] and
                            'bootDiagnostics' in result['properties']['diagnosticsProfile'] and
+                           'storageUri' in result['properties']['diagnosticsProfile']['bootDiagnostics'] and
                            result['properties']['diagnosticsProfile']['bootDiagnostics']['storageUri'] or None
         }
         if new_result['boot_diagnostics']['enabled']:
-            new_result['boot_diagnostics']['console_screenshot_uri'] = result['properties']['instanceView']['bootDiagnostics']['consoleScreenshotBlobUri']
-            new_result['boot_diagnostics']['serial_console_log_uri'] = result['properties']['instanceView']['bootDiagnostics']['serialConsoleLogBlobUri']
+            if 'consoleScreenshotBlobUri' in result['properties']['instanceView']['bootDiagnostics']:
+                new_result['boot_diagnostics']['console_screenshot_uri'] = result['properties']['instanceView']['bootDiagnostics']['consoleScreenshotBlobUri']
+            if 'serialConsoleLogBlobUri' in result['properties']['instanceView']['bootDiagnostics']:
+                new_result['boot_diagnostics']['serial_console_log_uri'] = result['properties']['instanceView']['bootDiagnostics']['serialConsoleLogBlobUri']
 
         vhd = result['properties']['storageProfile']['osDisk'].get('vhd')
         if vhd is not None:
